@@ -1,6 +1,5 @@
 name: Build ALIEN Windows
 
-# triggers on push to main and allows manual dispatch
 on:
   push:
     branches: [ main ]
@@ -11,36 +10,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1) grab your source
+      # 1) Check out your source
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2) set up a modern CMake (no caching, no legacy service)
+      # 2) Install CMake (official action, v2)
       - name: Setup CMake
-        uses: actions/setup-cmake@v3
+        uses: actions/setup-cmake@v2
         with:
-          # optional: pin a version; runner already has 3.x available
-          cmake-version: '3.27.5'
+          cmake-version: '3.27.5'   # or omit to get the default available
 
-      # 3) bootstrap vcpkg for any C++ deps
+      # 3) Bootstrap vcpkg
       - name: Bootstrap vcpkg
         uses: microsoft/vcpkg-action@v2
 
-      # 4) install CUDA so nvcc is on the PATH
-      - name: Install CUDA Toolkit 12.4
+      # 4) Install CUDA 12.4
+      - name: Install CUDA Toolkit
         uses: jimmye/cuda-toolkit-action@v0.2.18
         with:
           version: '12.4.0'
 
-      # 5) configure the build (include sm_120 for your RTX 5070)
+      # 5) Configure—embed sm_120 for RTX 5070
       - name: Configure with CMake
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCUDA_ARCHITECTURES=120
 
-      # 6) build the Release target
+      # 6) Build Release
       - name: Build Release
         run: cmake --build build --config Release -- -m
 
-      # 7) upload the finished exe as an artifact
+      # 7) Upload the .exe
       - name: Upload Windows EXE
         uses: actions/upload-artifact@v3
         with:

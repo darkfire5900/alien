@@ -1,9 +1,14 @@
-name: CI Build ALIEN (Ubuntu + sm_120)
+name: CI Build ALIEN (Ubuntu + CUDA sm_120)
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
 
 jobs:
   build:
@@ -11,47 +16,41 @@ jobs:
 
     steps:
       # 1) Checkout source
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3                         # official checkout action :contentReference[oaicite:8]{index=8}
 
-      # 2) (Option A) Install CMake & Ninja without legacy cache
-      - name: Install CMake & Ninja
-        uses: lukka/get-cmake@v3
-        with:
-          cmakeVersion: '3.27.5'
-          ninjaVersion:  '1.11.1'
-          useCloudCache: false    # disable GitHub cache :contentReference[oaicite:5]{index=5}
-          useLocalCache: false    # disable runner cache :contentReference[oaicite:6]{index=6}
+      # 2) Install CMake, Ninja & system deps
+      - name: Install system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build git \
+            libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev \
+            libxi-dev libxext-dev libxfixes-dev libgl1-mesa-dev libglu-dev :contentReference[oaicite:9]{index=9}
 
-      #    – OR (Option B) switch to a cache‑free installer
-      # - name: Setup CMake
-      #   uses: actions/setup-cmake@v2
-      #   with:
-      #     cmake-version: '3.27.5'
-
-      # 3) Bootstrap vcpkg (uses v2 cache API)
-      - name: Bootstrap vcpkg
-        uses: microsoft/vcpkg-action@v2             # new cache service :contentReference[oaicite:7]{index=7}
-
-      # 4) Install CUDA Toolkit 12.4
-      - name: Install CUDA
-        uses: Jimver/cuda-toolkit@v0.2.22           # Windows+Linux supported :contentReference[oaicite:8]{index=8}
+      # 3) Install CUDA Toolkit 12.4 via action
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.22                 # installs CUDA and sets CUDA_PATH :contentReference[oaicite:10]{index=10}
         with:
           cuda: '12.4.0'
 
-      # 5) Configure (embed CC 12.0 kernels for RTX 5070)
-      - name: Configure with CMake
+      # 4) Bootstrap vcpkg  
+      - name: Bootstrap vcpkg
+        run: |
+          git clone --depth=1 https://github.com/microsoft/vcpkg.git $VCPKG_ROOT
+          $VCPKG_ROOT/bootstrap-vcpkg.sh
+
+      # 5) Configure & build with CMake  
+      - name: Configure & Build
         run: |
           cmake -B build -S . \
-            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
             -DCUDA_ARCHITECTURES=120
+          cmake --build build --config $BUILD_TYPE -- -j$(nproc)
 
-      # 6) Build
-      - name: Build Release
-        run: cmake --build build --config Release -- -m
-
-      # 7) Upload artifact (v4 uses new cache service)
-      - name: Upload alien.exe
-        uses: actions/upload-artifact@v4          # avoid v3 brown‑outs :contentReference[oaicite:9]{index=9}
+      # 6) Upload build artifacts  
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4                 # v4 avoids v3 upload‑artifact deprecation :contentReference[oaicite:11]{index=11}
         with:
-          name: ALIEN-windows
-          path: build/Release/alien.exe
+          name: alien-linux
+          path: build/

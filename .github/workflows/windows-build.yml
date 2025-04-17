@@ -1,46 +1,51 @@
-name: Build ALIEN Windows
+name: Build ALIEN for Windows (Blackwell sm_120)
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ main ]          # or whatever your default branch is
+  workflow_dispatch:            # allows manual “Run workflow”
+
+env:
+  BUILD_TYPE: Release
 
 jobs:
   build-win:
     runs-on: windows-latest
 
     steps:
-      # 1) Check out your source
-      - name: Checkout code
-        uses: actions/checkout@v4
+    # 1 Checkout
+    - name: Checkout source
+      uses: actions/checkout@v4            # stable checkout action&#8203;:contentReference[oaicite:0]{index=0}
 
-      # 2) Install CMake (official action, v2)
-      - name: Setup CMake
-        uses: actions/setup-cmake@v2
-        with:
-          cmake-version: '3.27.5'   # or omit to get the default available
+    # 2 CMake (jwlawson v1 is the maintained tag)
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1  # installs & adds to PATH&#8203;:contentReference[oaicite:1]{index=1}
+      with:
+        cmake-version: '3.27.5'              # any 3.22+ works
 
-      # 3) Bootstrap vcpkg
-      - name: Bootstrap vcpkg
-        uses: microsoft/vcpkg-action@v2
+    # 3 vcpkg for C/C++ libraries
+    - name: Bootstrap vcpkg
+      uses: microsoft/vcpkg-action@v2        # official MS action&#8203;:contentReference[oaicite:2]{index=2}
 
-      # 4) Install CUDA 12.4
-      - name: Install CUDA Toolkit
-        uses: jimmye/cuda-toolkit-action@v0.2.18
-        with:
-          version: '12.4.0'
+    # 4 CUDA 12.4 (build‑tested on runner)
+    - name: Install CUDA Toolkit 12.4
+      uses: Jimver/cuda-toolkit@v0.2.22      # latest tag with Windows support&#8203;:contentReference[oaicite:3]{index=3}
+      with:
+        cuda: '12.4.0'
 
-      # 5) Configure—embed sm_120 for RTX 5070
-      - name: Configure with CMake
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCUDA_ARCHITECTURES=120
+    # 5 Configure – embed kernels for compute 12.0 (RTX 50‑series)
+    - name: Configure with CMake
+      run: cmake -B build -S . ^
+                 -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} ^
+                 -DCUDA_ARCHITECTURES=120
 
-      # 6) Build Release
-      - name: Build Release
-        run: cmake --build build --config Release -- -m
+    # 6 Build
+    - name: Build Release
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -- -m
 
-      # 7) Upload the .exe
-      - name: Upload Windows EXE
-        uses: actions/upload-artifact@v3
-        with:
-          name: ALIEN-windows
-          path: build/Release/alien.exe
+    # 7 Upload the binary
+    - name: Upload alien.exe
+      uses: actions/upload-artifact@v4       # v4 avoids Jan 2025 deprecation﻿:contentReference[oaicite:4]{index=4}
+      with:
+        name: ALIEN-windows
+        path: build/Release/alien.exe

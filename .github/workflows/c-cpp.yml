@@ -1,0 +1,67 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "develop" ]
+  pull_request:
+    branches: [ "develop" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Install build tools & dependencies
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            ccache
+
+      # 3. Cache ccache to speed up rebuilds
+      - name: Cache ccache
+        uses: actions/cache@v3
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('**/Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      # 4. Regenerate configure scripts if needed
+      - name: Bootstrap autotools
+        if: !exists('configure')
+        run: autoreconf -fiv
+
+      # 5. Configure the project
+      - name: Configure
+        run: |
+          mkdir -p build
+          cd build
+          ../configure --prefix=$HOME/.local
+
+      # 6. Build with parallel jobs
+      - name: Build
+        run: |
+          cd build
+          make -j$(nproc)
+
+      # 7. Run unit tests
+      - name: Test
+        run: |
+          cd build
+          make check
+
+      # 8. Perform a distcheck
+      - name: Distcheck
+        run: |
+          cd build
+          make distcheck

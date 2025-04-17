@@ -1,3 +1,13 @@
+name: Build ALIEN for Windows
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
 jobs:
   build:
     runs-on: ubuntu-latest   # or windows-latest

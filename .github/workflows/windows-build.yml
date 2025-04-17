@@ -1,56 +1,59 @@
-name: CI Build ALIEN (Ubuntu + CUDA sm_120)
+name: Build ALIEN for Windows
 
+# Trigger on pushes to main or manual dispatch
 on:
   push:
-    branches: [ develop ]
-  pull_request:
-    branches: [ develop ]
-
-env:
-  BUILD_TYPE: Release
-  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  windows-build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: powershell
 
     steps:
-      # 1) Checkout source
-      - uses: actions/checkout@v3                         # official checkout action :contentReference[oaicite:8]{index=8}
+      # 1. Check out the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+        # Latest v4 ensures Node16 support and sparse-checkout fixes :contentReference[oaicite:8]{index=8}
 
-      # 2) Install CMake, Ninja & system deps
-      - name: Install system packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build git \
-            libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev \
-            libxi-dev libxext-dev libxfixes-dev libgl1-mesa-dev libglu-dev :contentReference[oaicite:9]{index=9}
-
-      # 3) Install CUDA Toolkit 12.4 via action
-      - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.22                 # installs CUDA and sets CUDA_PATH :contentReference[oaicite:10]{index=10}
+      # 2. Install CMake (using the official setup action)
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
         with:
-          cuda: '12.4.0'
+          cmake-version: '3.27.0'
+        # This action downloads a matched CMake release into PATH :contentReference[oaicite:9]{index=9}
 
-      # 4) Bootstrap vcpkg  
-      - name: Bootstrap vcpkg
-        run: |
-          git clone --depth=1 https://github.com/microsoft/vcpkg.git $VCPKG_ROOT
-          $VCPKG_ROOT/bootstrap-vcpkg.sh
+      # 3. Install CUDA Toolkit 12.4 runtime
+      - name: Install CUDA 12.4 runtime
+        run: choco install cuda --version=12.4.1.551 -y
+        # Ensures the driver/runtime matches the build’s CUDA 12.4 linkage :contentReference[oaicite:10]{index=10}
 
-      # 5) Configure & build with CMake  
-      - name: Configure & Build
+      # 4. Bootstrap vcpkg for dependencies
+      - name: Install vcpkg dependencies
+        uses: microsoft/vcpkg-action@v2
+        # Caches and builds vcpkg packages from vcpkg.json :contentReference[oaicite:11]{index=11}
+
+      # 5. Configure CMake for compute capability 12.0 (Blackwell)
+      - name: Configure ALIEN
         run: |
-          cmake -B build -S . \
-            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          cmake -S . -B build \
+            -G "Visual Studio 17 2022" -A x64 \
+            -DCMAKE_BUILD_TYPE=Release \
             -DCUDA_ARCHITECTURES=120
-          cmake --build build --config $BUILD_TYPE -- -j$(nproc)
+        # Explicitly sets -DCUDA_ARCHITECTURES=120 for RTX 5070 support :contentReference[oaicite:12]{index=12}
 
-      # 6) Upload build artifacts  
-      - name: Upload binaries
-        uses: actions/upload-artifact@v4                 # v4 avoids v3 upload‑artifact deprecation :contentReference[oaicite:11]{index=11}
+      # 6. Build the project
+      - name: Build ALIEN
+        run: cmake --build build --config Release --parallel
+
+      # 7. Upload the compiled executable
+      - name: Upload alien.exe artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: alien-linux
-          path: build/
+          name: alien-win
+          path: build/Release/alien.exe
+        # v4 is required post‑June 2024 deprecation of v3 :contentReference[oaicite:13]{index=13}

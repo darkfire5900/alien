@@ -1,13 +1,12 @@
 name: Build ALIEN for Windows
 
-# Trigger on pushes to main or manual dispatch
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  windows-build:
+  build-win:
     runs-on: windows-latest
 
     defaults:
@@ -15,45 +14,38 @@ jobs:
         shell: powershell
 
     steps:
-      # 1. Check out the repository
-      - name: Checkout code
+      # 1. Fetch the repo
+      - name: Checkout repository
         uses: actions/checkout@v4
-        # Latest v4 ensures Node16 support and sparse-checkout fixes :contentReference[oaicite:8]{index=8}
 
-      # 2. Install CMake (using the official setup action)
+      # 2. Install CMake (no legacy cache)
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.27.0'
-        # This action downloads a matched CMake release into PATH :contentReference[oaicite:9]{index=9}
+          cmake-version: '3.25.2'
 
-      # 3. Install CUDA Toolkit 12.4 runtime
+      # 3. Install CUDA 12.4 runtime for compatibility
       - name: Install CUDA 12.4 runtime
         run: choco install cuda --version=12.4.1.551 -y
-        # Ensures the driver/runtime matches the build’s CUDA 12.4 linkage :contentReference[oaicite:10]{index=10}
 
-      # 4. Bootstrap vcpkg for dependencies
-      - name: Install vcpkg dependencies
+      # 4. Bootstrap native dependencies via vcpkg
+      - name: Bootstrap vcpkg dependencies
         uses: microsoft/vcpkg-action@v2
-        # Caches and builds vcpkg packages from vcpkg.json :contentReference[oaicite:11]{index=11}
 
-      # 5. Configure CMake for compute capability 12.0 (Blackwell)
-      - name: Configure ALIEN
-        run: |
-          cmake -S . -B build \
-            -G "Visual Studio 17 2022" -A x64 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCUDA_ARCHITECTURES=120
-        # Explicitly sets -DCUDA_ARCHITECTURES=120 for RTX 5070 support :contentReference[oaicite:12]{index=12}
+      # 5. Configure ALIEN with Blackwell support
+      - name: Configure ALIEN with CUDA sm_120
+        run: cmake -S . -B build \
+             -G "Visual Studio 17 2022" -A x64 \
+             -DCMAKE_BUILD_TYPE=Release \
+             -DCUDA_ARCHITECTURES=120
 
       # 6. Build the project
       - name: Build ALIEN
         run: cmake --build build --config Release --parallel
 
-      # 7. Upload the compiled executable
+      # 7. Publish the Windows executable
       - name: Upload alien.exe artifact
         uses: actions/upload-artifact@v4
         with:
           name: alien-win
           path: build/Release/alien.exe
-        # v4 is required post‑June 2024 deprecation of v3 :contentReference[oaicite:13]{index=13}
